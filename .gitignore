@@ -1,0 +1,32 @@
+# Python cache and build artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Editor/OS files
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+
+# Runtime and generated outputs
+*.log
+runs/
+
+# Local sample images (optional per user machine)
+images/
+
+# Dataset is large; keep it out of git and download per teammate
+dataset/train/
+dataset/valid/
+dataset/test/

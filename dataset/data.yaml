@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 1
+names: ['indian_licence_plate']
+
+roboflow:
+  workspace: aryans-workspace-inqhr
+  project: indian-license-plate-knte7-l6agk
+  version: 1
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/aryans-workspace-inqhr/indian-license-plate-knte7-l6agk/dataset/1
