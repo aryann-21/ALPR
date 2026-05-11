@@ -34,3 +34,5 @@ dataset/test/
 
 #output files
 output/
+uploads/
+static/results/*

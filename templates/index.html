@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ANPR System - License Plate Recognition</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <!-- Loading Overlay -->
+    <div class="loading-overlay hidden" id="loadingOverlay">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <div class="loading-text">Processing Your File</div>
+            <div class="loading-subtext">Detecting license plates...</div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+                    <line x1="7" y1="12" x2="17" y2="12"></line>
+                </svg>
+                <span>Automatic License Plate Recognition System</span>
+            </div>
+            <ul class="nav-links">
+                <li><a href="#" class="nav-link active">Dashboard</a></li>
+                <li><a href="#upload" class="nav-link">Upload</a></li>
+                <li><a href="#results" class="nav-link">Results</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <main class="main-container">
+        
+        <!-- Hero Section -->
+        <section class="hero-section">
+            <div class="hero-content">
+                <h1 class="hero-title">Automatic Number Plate Recognition</h1>
+                <p class="hero-subtitle">Advanced vehicle license plate detection and OCR technology</p>
+            </div>
+        </section>
+
+        <!-- Upload Section -->
+        <section id="upload" class="upload-section">
+            <div class="upload-container">
+                <h2 class="section-title">Upload Your File</h2>
+                <p class="section-description">Supported formats: JPG, PNG (images) or MP4, AVI, MOV (videos)</p>
+                
+                <form method="POST" enctype="multipart/form-data" class="upload-form">
+                    <div class="upload-area" id="uploadArea">
+                        <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                        <div class="upload-text">
+                            <p class="upload-main">Drag and drop your file here</p>
+                            <p class="upload-sub">or click to browse</p>
+                        </div>
+                        <div class="file-name" id="fileName"></div>
+                        <input type="file" name="file" id="fileInput" required accept="image/*,video/*" class="file-input">
+                    </div>
+                    <button type="submit" class="submit-btn">Process File</button>
+                </form>
+            </div>
+        </section>
+
+        <!-- Results Section -->
+        {% if plates or result_image %}
+        <section id="results" class="results-section">
+            <div class="results-container">
+                
+                <!-- Detected Plates -->
+                {% if plates %}
+                <div class="results-plates">
+                    <h2 class="section-title">Detected License Plates</h2>
+                    <p class="section-description">{{ plates|length }} plate(s) detected</p>
+                    
+                    <div class="plates-grid">
+                        {% for plate in plates %}
+                        <div class="plate-card">
+                            <div class="plate-display">{{ plate }}</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Detection Result Image -->
+                {% if result_image %}
+                <div class="results-image">
+                    <h2 class="section-title">Detection Visualization</h2>
+                    <div class="image-container">
+                        <img src="/{{ result_image }}" alt="Detection Result" class="result-img">
+                    </div>
+                </div>
+                {% endif %}
+
+            </div>
+        </section>
+        {% endif %}
+
+        <!-- Empty State -->
+        {% if not plates and not result_image %}
+        <section class="empty-state">
+            <div class="empty-content">
+                <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                <h3>No Results Yet</h3>
+                <p>Upload an image or video to detect license plates</p>
+            </div>
+        </section>
+        {% endif %}
+
+    </main>
+
+    <script>
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const fileName = document.getElementById('fileName');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const form = document.querySelector('.upload-form');
+
+        // Drag and drop functionality
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            fileInput.files = e.dataTransfer.files;
+            updateFileDisplay();
+        });
+
+        uploadArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            updateFileDisplay();
+        });
+
+        function updateFileDisplay() {
+            if (fileInput.files.length > 0) {
+                uploadArea.classList.add('selected');
+                const file = fileInput.files[0];
+                fileName.textContent = '✓ Selected: ' + file.name;
+            } else {
+                uploadArea.classList.remove('selected');
+                fileName.textContent = '';
+            }
+        }
+
+        // Show loading overlay when form is submitted
+        form.addEventListener('submit', (e) => {
+            if (fileInput.files.length > 0) {
+                loadingOverlay.classList.remove('hidden');
+            }
+        });
+
+        // Hide loading overlay when page fully loads
+        window.addEventListener('load', () => {
+            loadingOverlay.classList.add('hidden');
+        });
+    </script>
+</body>
+</html>

@@ -1,9 +1,19 @@
+from flask import Flask, render_template, request, jsonify
 from ultralytics import YOLO
 import easyocr
 import cv2
 import re
 import os
 from collections import Counter
+import uuid
+
+app = Flask(__name__)
+
+UPLOAD_FOLDER = 'uploads'
+RESULT_FOLDER = 'static/results'
+
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(RESULT_FOLDER, exist_ok=True)
 
 # =========================
 # LOAD MODEL + OCR
@@ -13,14 +23,9 @@ model = YOLO("runs/detect/train4/weights/best.pt")
 reader = easyocr.Reader(['en'], gpu=True)
 
 # =========================
-# OCR MEMORY FOR VIDEO VOTING
-# =========================
-
-ocr_votes = Counter()
-
-# =========================
 # CLEAN TEXT
 # =========================
+
 
 def clean_text(text):
     text = text.upper()
@@ -28,22 +33,14 @@ def clean_text(text):
     return text
 
 # =========================
-# OCR CHARACTER CORRECTIONS
+# CORRECT OCR MISTAKES
 # =========================
-
-# Indian format:
-# AA00AA0000
-
-# Position wise correction:
-# letters section -> convert numbers to letters
-# numbers section -> convert letters to numbers
 
 
 def correct_plate(text):
 
     text = list(text)
 
-    # Common OCR mistakes
     num_to_char = {
         '0': 'O',
         '1': 'I',
@@ -59,22 +56,18 @@ def correct_plate(text):
         'B': '8'
     }
 
-    # State code letters
     for i in [0, 1]:
         if i < len(text) and text[i] in num_to_char:
             text[i] = num_to_char[text[i]]
 
-    # District numbers
     for i in [2, 3]:
         if i < len(text) and text[i] in char_to_num:
             text[i] = char_to_num[text[i]]
 
-    # Series letters
     for i in [4, 5]:
         if i < len(text) and text[i] in num_to_char:
             text[i] = num_to_char[text[i]]
 
-    # Last 4 digits
     for i in range(6, len(text)):
         if i < len(text) and text[i] in char_to_num:
             text[i] = char_to_num[text[i]]
@@ -82,7 +75,7 @@ def correct_plate(text):
     return ''.join(text)
 
 # =========================
-# VALIDATE INDIAN PLATE
+# VALIDATE INDIAN PLATES
 # =========================
 
 
@@ -93,22 +86,18 @@ def is_valid_plate(text):
     return re.match(pattern, text) is not None
 
 # =========================
-# PREPROCESS PLATE IMAGE
+# PREPROCESS PLATE
 # =========================
 
 
 def preprocess_plate(plate):
 
-    # Resize
     plate = cv2.resize(plate, None, fx=2, fy=2)
 
-    # Grayscale
     gray = cv2.cvtColor(plate, cv2.COLOR_BGR2GRAY)
 
-    # Denoise
     blur = cv2.GaussianBlur(gray, (3, 3), 0)
 
-    # Threshold
     thresh = cv2.threshold(
         blur,
         0,
@@ -122,8 +111,7 @@ def preprocess_plate(plate):
 # PROCESS FRAME
 # =========================
 
-
-def process_frame(frame, detected_plates):
+def process_frame(frame, detected_plates, ocr_votes):
 
     results = model(frame)[0]
 
@@ -135,46 +123,26 @@ def process_frame(frame, detected_plates):
 
             x1, y1, x2, y2 = map(int, [x1, y1, x2, y2])
 
-            # Crop plate
             plate = frame[y1:y2, x1:x2]
 
             if plate.size == 0:
                 continue
 
-            # =========================
-            # PREPROCESS BEFORE OCR
-            # =========================
-
             processed_plate = preprocess_plate(plate)
 
-            # OCR
             ocr_result = reader.readtext(processed_plate)
 
             if len(ocr_result) > 0:
 
                 text = clean_text(ocr_result[0][1])
 
-                # =========================
-                # OCR CORRECTIONS
-                # =========================
-
                 text = correct_plate(text)
-
-                # =========================
-                # VALIDATION
-                # =========================
 
                 if is_valid_plate(text):
 
-                    # =========================
-                    # FRAME VOTING
-                    # =========================
-
+                    detected_plates.add(text)
                     ocr_votes[text] += 1
 
-                    detected_plates.add(text)
-
-                    # Draw bounding box
                     cv2.rectangle(
                         frame,
                         (x1, y1),
@@ -183,7 +151,6 @@ def process_frame(frame, detected_plates):
                         2
                     )
 
-                    # Draw text
                     cv2.putText(
                         frame,
                         text,
@@ -197,58 +164,40 @@ def process_frame(frame, detected_plates):
     return frame
 
 # =========================
-# IMAGE MODE
+# IMAGE PROCESSING
 # =========================
 
 
-def process_image(image_path):
-
-    img = cv2.imread(image_path)
-
-    if img is None:
-        print("Image not found!")
-        return
+def process_image(filepath):
 
     detected_plates = set()
+    ocr_votes = Counter()
 
-    output = process_frame(img, detected_plates)
+    img = cv2.imread(filepath)
 
-    print("Detected Plates:")
+    output = process_frame(img, detected_plates, ocr_votes)
 
-    if len(detected_plates) == 0:
-        print("No valid plates detected")
+    result_filename = f'result_{uuid.uuid4().hex}.jpg'
+    result_path = os.path.join(RESULT_FOLDER, result_filename)
 
-    else:
-        for plate in sorted(detected_plates):
-            print(plate)
+    cv2.imwrite(result_path, output)
 
-    # Save output image
-    os.makedirs("output", exist_ok=True)
-
-    output_path = "output/result_image.jpg"
-
-    cv2.imwrite(output_path, output)
-
-    print(f"Output image saved to: {output_path}")
+    return sorted(detected_plates), result_path
 
 # =========================
-# VIDEO MODE
+# VIDEO PROCESSING
 # =========================
 
+def process_video(filepath):
 
-def process_video(video_path):
-
-    cap = cv2.VideoCapture(video_path)
-
-    if not cap.isOpened():
-        print("Could not open video")
-        return
+    cap = cv2.VideoCapture(filepath)
 
     detected_plates = set()
+    ocr_votes = Counter()
 
     frame_count = 0
 
-    last_output_frame = None
+    last_frame = None
 
     while True:
 
@@ -259,82 +208,74 @@ def process_video(video_path):
 
         frame_count += 1
 
-        # Process every 3rd frame
         if frame_count % 3 != 0:
             continue
 
-        output = process_frame(frame, detected_plates)
+        output = process_frame(frame, detected_plates, ocr_votes)
 
-        last_output_frame = output
+        last_frame = output
 
     cap.release()
-
-     # =========================
-    # FINAL OUTPUT USING VOTING
-    # =========================
-
-    print("Final Detected Vehicle Numbers:")
 
     final_results = []
 
     for plate, count in ocr_votes.items():
 
-        # Keep only plates seen multiple times
         if count >= 2:
             final_results.append((plate, count))
 
-    if len(final_results) == 0:
-        print("No valid plates detected")
+    final_results.sort(key=lambda x: x[1], reverse=True)
 
-    else:
+    result_filename = f'video_{uuid.uuid4().hex}.jpg'
+    result_path = os.path.join(RESULT_FOLDER, result_filename)
 
-        final_results.sort(key=lambda x: x[1], reverse=True)
+    if last_frame is not None:
+        cv2.imwrite(result_path, last_frame)
 
-        for i, (plate, count) in enumerate(final_results, start=1):
-            print(f"{i}. {plate}  (Detected {count} times)")
+    plates = [plate for plate, count in final_results]
 
-    # =========================
-    # SAVE RESULTS
-    # =========================
-
-    os.makedirs("output", exist_ok=True)
-
-    with open("output/detected_plates.txt", "w") as f:
-
-        for plate, count in final_results:
-            f.write(f"{plate} | Count: {count}\n")
-
-    if last_output_frame is not None:
-
-        cv2.imwrite(
-            "output/video_result.jpg",
-            last_output_frame
-        )
-
-    print("Results saved to output/detected_plates.txt")
-    print("Output frame saved to output/video_result.jpg")
+    return plates, result_path
 
 # =========================
-# MAIN MENU
+# MAIN ROUTE
 # =========================
 
-print("===== ANPR SYSTEM =====")
-print("1. Process Image")
-print("2. Process Video")
 
-choice = input("Enter choice (1 or 2): ")
+@app.route('/', methods=['GET', 'POST'])
+def index():
 
-if choice == '1':
+    plates = []
+    result_image = None
 
-    image_path = input("Enter image path: ")
+    if request.method == 'POST':
 
-    process_image(image_path)
+        file = request.files['file']
 
-elif choice == '2':
+        if file:
 
-    video_path = input("Enter video path: ")
+            filepath = os.path.join(UPLOAD_FOLDER, file.filename)
 
-    process_video(video_path)
+            file.save(filepath)
 
-else:
-    print("Invalid choice")
+            ext = file.filename.split('.')[-1].lower()
+
+            if ext in ['jpg', 'jpeg', 'png']:
+
+                plates, result_image = process_image(filepath)
+
+            elif ext in ['mp4', 'avi', 'mov']:
+
+                plates, result_image = process_video(filepath)
+
+    return render_template(
+        'index.html',
+        plates=plates,
+        result_image=result_image
+    )
+
+# =========================
+# RUN APP
+# =========================
+
+if __name__ == '__main__':
+    app.run(debug=True)
