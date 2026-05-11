@@ -1,4 +1,10 @@
-ultralytics>=8.3.0
-easyocr>=1.7.1
-opencv-python>=4.10.0
-pandas>=2.0.0
+flask
+gunicorn
+ultralytics
+easyocr
+opencv-python-headless
+torch
+torchvision
+numpy
+pandas
+pillow
