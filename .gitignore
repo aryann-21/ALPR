@@ -23,10 +23,14 @@ Thumbs.db
 *.log
 runs/
 
-# Local sample images (optional per user machine)
+# Local samples
 images/
+videos/
 
 # Dataset is large; keep it out of git and download per teammate
 dataset/train/
 dataset/valid/
 dataset/test/
+
+#output files
+output/
