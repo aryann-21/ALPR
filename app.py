@@ -20,7 +20,7 @@ os.makedirs(RESULT_FOLDER, exist_ok=True)
 # =========================
 
 model = YOLO("runs/detect/train4/weights/best.pt")
-reader = easyocr.Reader(['en'], gpu=True)
+reader = easyocr.Reader(['en'], gpu=False)
 
 # =========================
 # CLEAN TEXT
@@ -278,4 +278,4 @@ def index():
 # =========================
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000)
