@@ -21,6 +21,7 @@ Thumbs.db
 
 # Runtime and generated outputs
 *.log
+runs/
 
 # Local samples
 images/

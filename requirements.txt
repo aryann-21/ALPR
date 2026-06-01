@@ -1,5 +1,4 @@
 flask
-gunicorn
 ultralytics
 easyocr
 opencv-python-headless
@@ -8,4 +7,3 @@ torchvision
 numpy
 pandas
 pillow
-werkzeug
